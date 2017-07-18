@@ -67,6 +67,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <winsock2.h>
+
 #else
 #include <unistd.h>
 
@@ -77,6 +78,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
 #endif
 
 #include "util_sys.h"
@@ -370,11 +372,11 @@ static int client_connect_server(int transport_protocol, const struct sockaddr* 
     /* Perform SSL handshake */
     if(tls_peer_do_handshake(speer, addr, addr_size) == -1)
     {
-      fprintf(stderr, "TLS handshake failed!\n");
+      fprintf(stderr, "TLS handshake failed!-%d\n", __LINE__);
       return -1;
     }
 
-    fprintf(stdout, "TLS handshake OK.\n");
+    fprintf(stdout,"TLS handshake OK.-%d\n", __LINE__);
     return 0;
   }
   else if(sock != -1)
@@ -434,6 +436,7 @@ static int client_allocate_address(int transport_protocol, int relay_protocol, i
 
   if(!user || !domain || !nonce)
   {
+    fprintf(stderr, "no have user or domain or nonce!-%d\n", __LINE__);
     return -1;
   }
 
@@ -487,17 +490,18 @@ static int client_allocate_address(int transport_protocol, int relay_protocol, i
       /* MESSAGE-INTEGRITY option has to be in message, so
        * deallocate ressources and return
        */
+      fprintf(stderr, "MESSAGE-INTEGRITY is not in message!-%d\n", __LINE__);
       iovec_free_data(iov, index);
       return -1;
     }
   
 
-  fprintf(stdout, "Send Allocate request.\n");
+  fprintf(stdout,"Send Allocate request.-%d\n", __LINE__);
 
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -509,13 +513,13 @@ static int client_allocate_address(int transport_protocol, int relay_protocol, i
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1 || (nonce_len == 0 && !message.nonce))
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
 
@@ -526,6 +530,20 @@ static int client_allocate_address(int transport_protocol, int relay_protocol, i
     *nonce_len = ntohs(message.nonce->turn_attr_len);
   }
 
+  int32_t nNoneLen = 0;
+  int32_t nMsgType = 0;
+  if(message.nonce)
+      nNoneLen = ntohs(message.nonce->turn_attr_len);
+  if(message.msg)
+      nMsgType = ntohs(message.msg->turn_msg_type);
+  if(STUN_IS_ERROR_RESP(ntohs(message.msg->turn_msg_type)))
+  {
+    fprintf(stderr, "Resp Error message! nonce_len:%d msgType:%d -%d\n", nNoneLen, nMsgType, __LINE__);
+  }
+  else
+  {
+    fprintf(stdout, "Resp success message! nonce_len:%d msgType:%d -%d\n", nNoneLen, nMsgType, __LINE__);
+  }
 
   return STUN_IS_ERROR_RESP(ntohs(message.msg->turn_msg_type)) ? -1 : 0;
 }
@@ -602,11 +620,11 @@ static int client_refresh_allocation(int transport_protocol, int sock, struct tl
     return -1;
   }
 
-  fprintf(stdout, "Send Refresh request.\n");
+  fprintf(stdout,"Send Refresh request.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -618,13 +636,13 @@ static int client_refresh_allocation(int transport_protocol, int sock, struct tl
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
 
@@ -703,11 +721,10 @@ static int client_create_permission(int transport_protocol, int sock, struct tls
     return -1;
   }
 
-  fprintf(stdout, "Send CreatePermission request.\n");
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -719,16 +736,16 @@ static int client_create_permission(int transport_protocol, int sock, struct tls
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
-	fprintf(stderr, "test: client_create_permission end\n");
+	fprintf(stderr, "test: client_create_permission end-%d\n", __LINE__);
   return STUN_IS_ERROR_RESP(ntohs(message.msg->turn_msg_type)) ? -1 : 0;
 }
 
@@ -812,11 +829,11 @@ static int client_send_data(int transport_protocol, int sock, struct tls_peer* s
     return -1;
   }
 
-  fprintf(stdout, "Send Send indication.\n");
+  fprintf(stdout,"Send Send indication.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -828,19 +845,19 @@ static int client_send_data(int transport_protocol, int sock, struct tls_peer* s
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(message.data)
   {
-    fprintf(stdout, "Receive data: %u\n", ntohs(message.data->turn_attr_len));
+    fprintf(stdout,"Receive data: %u-%d\n", ntohs(message.data->turn_attr_len), __LINE__);
   }
 
   return 0;
@@ -925,11 +942,11 @@ static int client_channelbind(int transport_protocol, int sock, struct tls_peer*
     return -1;
   }
 
-  fprintf(stdout, "Send CreatePermission request.\n");
+  fprintf(stdout,"Send CreatePermission request.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -941,13 +958,13 @@ static int client_channelbind(int transport_protocol, int sock, struct tls_peer*
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
 
@@ -986,11 +1003,11 @@ static int client_send_channeldata(int transport_protocol, int sock, struct tls_
   iov[index].iov_len = data_len;
   index++;
 
-  fprintf(stdout, "Send ChannelData.\n");
+  fprintf(stdout,"Send ChannelData.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         sizeof(struct turn_channel_data) + data_len, iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -1001,7 +1018,7 @@ static int client_send_channeldata(int transport_protocol, int sock, struct tls_
   if(nb > 0)
   {
     struct turn_channel_data* dt = (struct turn_channel_data*)buf;
-    fprintf(stdout, "Received ChannelData: %u bytes\n", ntohs(dt->turn_channel_len));
+	fprintf(stdout,"Received ChannelData: %u bytes-%d\n", ntohs(dt->turn_channel_len), __LINE__);
   }
 
   return 0;
@@ -1081,11 +1098,11 @@ static int client_send_connect(int transport_protocol, int sock, struct tls_peer
     return -1;
   }
 
-  fprintf(stdout, "Send Connect request.\n");
+  fprintf(stdout,"Send Connect request.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, sock, speer, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -1098,19 +1115,19 @@ static int client_send_connect(int transport_protocol, int sock, struct tls_peer
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(!message.connection_id)
   {
-    fprintf(stderr, "No connection ID.\n");
+    fprintf(stderr, "No connection ID.-%d\n", __LINE__);
     return -1;
   }
 
@@ -1119,7 +1136,7 @@ static int client_send_connect(int transport_protocol, int sock, struct tls_peer
   /* establish relay connection */
   if(*sock_tcp == -1 || connect(*sock_tcp, addr, addr_size) == -1)
   {
-    fprintf(stderr, "Failed to connect to TURN server.\n");
+    fprintf(stderr, "Failed to connect to TURN server.-%d\n", __LINE__);
     return -1;
   }
 
@@ -1170,11 +1187,11 @@ static int client_send_connect(int transport_protocol, int sock, struct tls_peer
     return -1;
   }
 
-  fprintf(stdout, "Send ConnectionBind request.\n");
+  fprintf(stdout,"Send ConnectionBind request.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, *sock_tcp, NULL, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -1185,16 +1202,16 @@ static int client_send_connect(int transport_protocol, int sock, struct tls_peer
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
-  fprintf(stdout, "Receive ConnectionBind response OK\n");
+  fprintf(stdout,"Receive ConnectionBind response OK-%d\n", __LINE__);
 
   return STUN_IS_ERROR_RESP(ntohs(message.msg->turn_msg_type)) ? -1 : 0;
 }
@@ -1254,19 +1271,19 @@ static int client_wait_connection(int transport_protocol, int sock, struct tls_p
 
   if(nb == -1)
   {
-    fprintf(stderr, "Receive failed!\n");
+    fprintf(stderr, "Receive failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(turn_parse_message(buf, nb, &message, tabu, &tabu_size) == -1)
   {
-    fprintf(stderr, "Parsing failed!\n");
+    fprintf(stderr, "Parsing failed!-%d\n", __LINE__);
     return -1;
   }
 
   if(!message.connection_id)
   {
-    fprintf(stderr, "No connection ID.\n");
+    fprintf(stderr, "No connection ID.-%d\n", __LINE__);
     return -1;
   }
 
@@ -1277,7 +1294,7 @@ static int client_wait_connection(int transport_protocol, int sock, struct tls_p
   /* establish relay connection */
   if(*sock_tcp == -1 || connect(*sock_tcp, addr, addr_size) == -1)
   {
-    fprintf(stderr, "Failed to connect to TURN server.\n");
+    fprintf(stderr, "Failed to connect to TURN server.-%d\n", __LINE__);
     return -1;
   }
 
@@ -1328,11 +1345,11 @@ static int client_wait_connection(int transport_protocol, int sock, struct tls_p
     return -1;
   }
 
-  fprintf(stdout, "Send ConnectionBind request.\n");
+  fprintf(stdout,"Send ConnectionBind request.-%d\n", __LINE__);
   if(turn_send_message(transport_protocol, *sock_tcp, NULL, addr, addr_size,
         ntohs(hdr->turn_msg_len) + sizeof(struct turn_msg_hdr), iov, index) == -1)
   {
-    fprintf(stderr, "Send failed!\n");
+    fprintf(stderr, "Send failed!-%d\n", __LINE__);
     perror("send");
     iovec_free_data(iov, index);
     return -1;
@@ -1389,7 +1406,7 @@ int main(int argc, char** argv)
     /* no need to go further since program
      * will not be able to bind/connect a socket
      */
-    fprintf(stderr, "Error WSAStartup\n");
+    fprintf(stderr, "Error WSAStartup-%d\n", __LINE__);
     exit(EXIT_FAILURE);
   }
 #endif
@@ -1415,7 +1432,7 @@ int main(int argc, char** argv)
 
   if(len != 3 && len != 4)
   {
-    fprintf(stderr, "Bad protocol, possible choices are udp, tcp, tls or dtls.\n");
+    fprintf(stderr, "Bad protocol, possible choices are udp, tcp, tls or dtls.-%d\n", __LINE__);
     exit(EXIT_FAILURE);
   }
 
@@ -1439,7 +1456,7 @@ int main(int argc, char** argv)
   }
   else
   {
-    fprintf(stderr, "Bad protocol, possible choices are udp, tcp, tls or dtls.\n");
+    fprintf(stderr, "Bad protocol, possible choices are udp, tcp, tls or dtls.-%d\n", __LINE__);
     exit(EXIT_FAILURE);
   }
 
@@ -1455,14 +1472,14 @@ int main(int argc, char** argv)
   }
   else
   {
-    fprintf(stderr, "Bad relay protocol, possible choice is only udp.\n");
+    fprintf(stderr, "Bad relay protocol, possible choice is only udp.-%d\n", __LINE__);
     exit(EXIT_FAILURE);
   }
 
   /* if TURN-TCP is used, make sure that control connection is TCP */
   if(!strncmp(conf.relay_protocol, "tcp", len) && transport_protocol != IPPROTO_TCP)
   {
-    fprintf(stderr, "TCP relays work only when client have a TCP connection to its TURN server.\n");
+    fprintf(stderr, "TCP relays work only when client have a TCP connection to its TURN server.-%d\n", __LINE__);
     exit(EXIT_FAILURE);
   }
 
@@ -1484,7 +1501,7 @@ int main(int argc, char** argv)
     strncpy(password,conf.password,15);
   }
 
-  fprintf(stdout, "Protocol: %s (%d) use TLS: %d.\n", conf.protocol, transport_protocol, use_tls);
+  fprintf(stdout,"Protocol: %s (%d) use TLS: %d.-%d\n", conf.protocol, transport_protocol, use_tls, __LINE__);
 
   /* get address for server_address */
 
@@ -1499,7 +1516,7 @@ int main(int argc, char** argv)
 
   if((r = getaddrinfo(conf.server_address, port_str, &hints, &res)) != 0)
   {
-    fprintf(stderr, "getaddrinfo(%s:%s): %s\n", conf.server_address, port_str, gai_strerror(r));
+    fprintf(stderr, "getaddrinfo(%s:%s): %s-%d\n", conf.server_address, port_str, gai_strerror(r), __LINE__);
     exit(EXIT_FAILURE);
   }
 
@@ -1517,7 +1534,7 @@ int main(int argc, char** argv)
 
   if((r = getaddrinfo(conf.peer_address, conf.peer_port, &hints, &res)) != 0)
   {
-    fprintf(stderr, "getaddrinfo(%s:%s): %s\n", conf.peer_address, conf.peer_port, gai_strerror(r));
+    fprintf(stderr, "getaddrinfo(%s:%s): %s-%d\n", conf.peer_address, conf.peer_port, gai_strerror(r), __LINE__);
     exit(EXIT_FAILURE);
   }
 
@@ -1531,7 +1548,7 @@ int main(int argc, char** argv)
    */
   if(use_tls && (!conf.certificate_file || !conf.private_key_file || !conf.ca_file))
   {
-    fprintf(stderr, "Missing parameters to setup TLS (required -c, -p, -a command line parameters).\n");
+    fprintf(stderr, "Missing parameters to setup TLS (required -c, -p, -a command line parameters).-%d\n", __LINE__);
     free(userdomainpass);
     exit(EXIT_FAILURE);
   }
@@ -1544,7 +1561,7 @@ int main(int argc, char** argv)
   /* create local socket and connect to the TURN server */
   if(client_setup_socket(transport_protocol, (server_addr_size == sizeof(struct sockaddr_in6)) ? "::" : "0.0.0.0", 0, &sock, use_tls ? &speer : NULL, conf.ca_file, conf.certificate_file, conf.private_key_file) == -1)
   {
-    fprintf(stderr, "Error creating local socket.\n");
+    fprintf(stderr, "Error creating local socket.-%d\n", __LINE__);
 
     if(use_tls)
     {
@@ -1555,7 +1572,7 @@ int main(int argc, char** argv)
 
   if(client_connect_server(transport_protocol, (struct sockaddr*)&server_addr, server_addr_size, sock, speer) == -1)
   {
-    fprintf(stderr, "Error connecting to server.\n");
+    fprintf(stderr, "Error connecting to server.-%d\n", __LINE__);
     ret = EXIT_FAILURE;
     goto quit;
   }
@@ -1573,13 +1590,13 @@ int main(int argc, char** argv)
   md5_generate(md_buf, userdomainpass, userdomainpass_len - 1);
 
   /* client connected and can send TURN message */
-  fprintf(stdout, "sock: %d speer: %p connected!\n", sock, (void*)speer);
+  fprintf(stdout,"sock: %d speer: %p connected!-%d\n", sock, (void*)speer, __LINE__);
 
   /* first request always failed but response contains the nonce */
   client_allocate_address(transport_protocol, relay_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, family, user, md_buf, domain, nonce, &nonce_len);
   if(nonce_len == 0)
   {
-    fprintf(stderr, "Allocation: bad message received (no nonce).\n");
+    fprintf(stderr, "Allocation: bad message received (no nonce).-%d\n", __LINE__);
     ret = EXIT_FAILURE;
     goto quit;
   }
@@ -1589,17 +1606,17 @@ int main(int argc, char** argv)
    */
   if(client_allocate_address(transport_protocol, relay_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, family, user, md_buf, domain, nonce, &nonce_len) == -1)
   {
-    fprintf(stderr, "Probably wrong credentials or requested family not supported.\n");
+    fprintf(stderr, "Probably wrong credentials or requested family not supported.-%d\n", __LINE__);
     ret = EXIT_FAILURE;
     goto quit;
   }
 
-  fprintf(stdout, "Allocate an address!\n");
+  fprintf(stdout,"Allocate an address!-%d\n", __LINE__);
 
   /* add permission(s) */
   if(client_create_permission(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, (struct sockaddr*)&peer_addr, user, md_buf, domain, nonce, nonce_len) == -1)
   {
-    fprintf(stderr, "CreatePermission failed.\n");
+    fprintf(stderr, "CreatePermission failed.-%d\n", __LINE__);
     ret = EXIT_FAILURE;
     goto quit;
   }
@@ -1633,7 +1650,7 @@ fprintf(stderr, "test: while 1 end\n");
 	
 	sleep(10000000);*/
 
-  fprintf(stdout, "Permission installed!\n");
+  fprintf(stdout,"Permission installed!-%d\n", __LINE__);
 
   if(relay_protocol == IPPROTO_UDP)
   {
@@ -1641,7 +1658,7 @@ fprintf(stderr, "test: while 1 end\n");
     //memset(data, 0xfe, sizeof(data));
     if(client_send_data(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, (struct sockaddr*)&peer_addr, data, sizeof(data), user, md_buf, domain, nonce, nonce_len) == -1)
     {
-      fprintf(stderr, "Send indication failed.\n");
+      fprintf(stderr, "Send indication failed.-%d\n", __LINE__);
       ret = EXIT_FAILURE;
       goto quit;
     }
@@ -1649,17 +1666,17 @@ fprintf(stderr, "test: while 1 end\n");
     /* bind to a channel */
     if(client_channelbind(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, (struct sockaddr*)&peer_addr, channel, user, md_buf, domain, nonce, nonce_len) == -1)
     {
-      fprintf(stderr, "ChannelBind failed.\n");
+      fprintf(stderr, "ChannelBind failed.-%d\n", __LINE__);
       ret = EXIT_FAILURE;
       goto quit;
     }
 
-    fprintf(stderr, "Channel bound to %u.\n", channel);
+    fprintf(stderr, "Channel bound to %u.-%d\n", channel, __LINE__);
 
     /* send data with ChannelData */
     if(client_send_channeldata(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, channel, data, sizeof(data)) == -1)
     {
-      fprintf(stderr, "ChannelData failed.\n");
+      fprintf(stderr, "ChannelData failed.-%d\n", __LINE__);
     }
   }
   else
@@ -1675,7 +1692,7 @@ fprintf(stderr, "test: while 1 end\n");
     /* send a Connect request and if success, send a ConnectionBind */
     if(client_send_connect(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, (struct sockaddr*)&peer_addr, &sock_tcp, user, md_buf, domain, nonce, nonce_len) == -1)
     {
-      fprintf(stderr, "Connect to the server failed.\n");
+      fprintf(stderr, "Connect to the server failed.-%d\n", __LINE__);
       ret = EXIT_FAILURE;
       goto quit;
     }
@@ -1683,13 +1700,13 @@ fprintf(stderr, "test: while 1 end\n");
     /* ok now send data on dedicated TCP socket */
     if(send(sock_tcp, data, sizeof(data), 0) == -1)
     {
-      fprintf(stderr, "Failed to send data to TURN-TCP relay.\n");
+      fprintf(stderr, "Failed to send data to TURN-TCP relay.-%d\n", __LINE__);
     }
     else
     {
       if((nb = recv(sock_tcp, buf, sizeof(buf), 0)) != -1)
       {
-        fprintf(stdout, "Receive %d bytes (TURN-TCP).\n", (int)nb);
+        fprintf(stdout,"Receive %d bytes (TURN-TCP).-%d\n", (int)nb, __LINE__);
       }
     }
 
@@ -1701,14 +1718,14 @@ fprintf(stderr, "test: while 1 end\n");
     /* wait ConnectionAttempt and then send ConnectionBind */
     if(client_wait_connection(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, (struct sockaddr*)&peer_addr, &sock_tcp2, user, md_buf, domain, nonce, nonce_len) == -1)
     {
-      fprintf(stderr, "Error no incoming connection before timeout or system error.\n");
+      fprintf(stderr, "Error no incoming connection before timeout or system error.-%d\n", __LINE__);
     }
     else
     {
       /* first receive is connection response */
       if(recv(sock_tcp2, buf, sizeof(buf), 0) == -1)
       {
-        fprintf(stderr, "Error, recv()\n");
+        fprintf(stderr, "Error, recv()-%d\n", __LINE__);
         ret = EXIT_FAILURE;
         goto quit;
       }
@@ -1716,7 +1733,7 @@ fprintf(stderr, "test: while 1 end\n");
       /* ok now receive data on dedicated TCP socket */
       if((nb = recv(sock_tcp2, buf, sizeof(buf), 0)) != -1)
       {
-        fprintf(stdout, "Receive %d bytes (TURN-TCP incoming connection).\n", (int)nb);
+        fprintf(stdout,"Receive %d bytes (TURN-TCP incoming connection).-%d\n", (int)nb, __LINE__);
       }
     }
 
@@ -1734,11 +1751,11 @@ fprintf(stderr, "test: while 1 end\n");
   /* release allocation by setting its lifetime to 0 */
   if(client_refresh_allocation(transport_protocol, sock, speer, (struct sockaddr*)&server_addr, server_addr_size, 0, user, md_buf, domain, nonce, nonce_len) == -1)
   {
-    fprintf(stderr, "Refresh failed.\n");
+    fprintf(stderr, "Refresh failed.-%d\n", __LINE__);
   }
 
   /* free resources */
-  fprintf(stdout, "Cleanup and exit.\n");
+  fprintf(stdout,"Cleanup and exit.-%d\n", __LINE__);
 
 quit:
   free(userdomainpass);

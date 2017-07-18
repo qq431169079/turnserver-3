@@ -1775,7 +1775,7 @@ static int turnserver_process_createpermission_request(int transport_protocol,
     }
     else
     {
-      debug(DBG_ATTR, "Refresh permission\n");
+      debug(DBG_ATTR, "Refresh permission to %s %u\n", str, peer_port);
       allocation_permission_set_timer(alloc_permission,
           TURN_DEFAULT_PERMISSION_LIFETIME);
     }
@@ -2564,6 +2564,12 @@ static int turnserver_process_allocate_request(int transport_protocol, int sock,
   }
 
   /* RFC6156 */
+  /*
+  * The REQUESTED-ADDRESS-FAMILY
+  * attribute allows a client to explicitly request the address type the TURN server will allocate
+  * (e.g., an IPv4-only node may request the TURN server to allocate an IPv6 address).
+  * 允许指定请求地址类型
+  */
   if(message->requested_addr_family)
   {
     switch(message->requested_addr_family->turn_attr_family)
@@ -2592,6 +2598,7 @@ static int turnserver_process_allocate_request(int transport_protocol, int sock,
   else
   {
     /* REQUESTED-ADDRESS-FAMILY absent so allocate an IPv4 address */
+    //分配中继地址
     family_address = turnserver_cfg_listen_address();
 
     if(!family_address)
@@ -2615,6 +2622,7 @@ static int turnserver_process_allocate_request(int transport_protocol, int sock,
   /* allocate the relayed address or skip this if server has a token,
    * try 5 times to find a free port or couple of free ports.
    */
+  //分配中继端口
   while(!has_token && (relayed_sock == -1 && quit_loop < 5))
   {
   	//CMS_LOG_Printf("has_token:%d,relayed_sock:%d",has_token,relayed_sock);
@@ -2684,6 +2692,7 @@ static int turnserver_process_allocate_request(int transport_protocol, int sock,
       }
     }
 
+    //even_port属性被赋值
     if(r_flag)
     {
       reservation_port = port + 1;
@@ -2818,6 +2827,7 @@ static int turnserver_process_allocate_request(int transport_protocol, int sock,
   desc->tuple_sock = sock;
 
   /* add to the list */
+  //成功后添加进allocation列表
   allocation_list_add(allocation_list, desc);
 
   /* send back the success response */
@@ -2842,6 +2852,7 @@ send_success_response:
     idx++;
 
     /* required attributes */
+    //对中继地址组包
     if(!(attr = turn_attr_xor_relayed_address_create(
             (struct sockaddr*)&relayed_addr, STUN_MAGIC_COOKIE,
             message->msg->turn_msg_id, &iov[idx])))
@@ -2851,6 +2862,16 @@ send_success_response:
       turnserver_send_error(transport_protocol, sock, method,
           message->msg->turn_msg_id, 500, saddr, saddr_size, speer, desc->key);
       return -1;
+    }
+    else
+    {
+      //打印中继地址
+      if(relayed_addr.ss_family == AF_INET)
+      {
+        char relayed_src[INET6_ADDRSTRLEN];
+        inet_ntop(AF_INET, &((struct sockaddr_in*)&relayed_addr)->sin_addr, relayed_src, INET6_ADDRSTRLEN);
+        debug(DBG_ATTR, "Relayed address=%s:%d\n", relayed_src, ntohs(((struct sockaddr_in*)&relayed_addr)->sin_port));
+      }
     }
     hdr->turn_msg_len += iov[idx].iov_len;
     idx++;
@@ -2998,6 +3019,7 @@ static int turnserver_process_turn(int transport_protocol, int sock,
   }
 
   /* check the 5-tuple except for an Allocate request */
+  //完成allocate请求后 后续请求的验证在allocation列表中查找
   if(method != TURN_METHOD_ALLOCATE)
   {
     desc = allocation_list_find_tuple(allocation_list, transport_protocol,
@@ -3078,6 +3100,7 @@ static int turnserver_process_turn(int transport_protocol, int sock,
       }
     }
 
+    //各个请求处理
     switch(method)
     {
       case TURN_METHOD_ALLOCATE:
@@ -3266,7 +3289,7 @@ static int turnserver_listen_recv(int transport_protocol, int sock,
     return -1;
   }
 
-  /* check the fingerprint if present */	//У���㷨
+  /* check the fingerprint if present */	//校验算法
   if(message.fingerprint)
   {
     /* verify if CRC is valid */
@@ -3621,7 +3644,8 @@ static int turnserver_listen_recv(int transport_protocol, int sock,
    * now check that specific method requirement are OK
    */
   debug(DBG_ATTR, "OK basic validation are done, process the TURN message\n");
-  //���ϴ��붼��������鱨�ĵĿ����Ժ��û�����������nonce�Ŀ����ԡ�
+  //以上代码都是用来检查报文的可用性和用户名；域名；nonce的可用性。
+
   return turnserver_process_turn(transport_protocol, sock, &message, saddr,
       daddr, saddr_size, allocation_list, account, speer);
 }
@@ -3679,7 +3703,7 @@ static int turnserver_relayed_recv(const char* buf, ssize_t buflen,
   }
 
   /* check if the peer has permission */
-  if(0 && !allocation_desc_find_permission_sockaddr(desc, saddr))	//����permission��⣬ʹ�������ܹ������ͳ�ȥ
+  if(0 && !allocation_desc_find_permission_sockaddr(desc, saddr))	//屏蔽permission检测，使得数据能够被发送出去
   {
     /* no permission, discard */
     inet_ntop(saddr->sa_family, peer_addr, str, INET6_ADDRSTRLEN);
@@ -3992,7 +4016,8 @@ static void turnserver_process_tcp_stream(const char* buf, ssize_t nb,
 /**
  * \brief Check if server can relay specific address with its current
  * configuration.
- *
+ * 检查是否能用当前的配置中继地址
+ * 
  * For example if IPv6 is disabled, the server will drop immediately packets
  * coming from an IPv6-only client.
  * \param listen_address IPv4 listen address
@@ -4551,11 +4576,20 @@ static void turnserver_main(struct listen_sockets* sockets,
       daddr_size = sizeof(struct sockaddr_storage);
 
       getsockname(sockets->sock_udp, (struct sockaddr*)&daddr, &daddr_size);
+      //接收的到数据包，保存对方的IP
       nb = recvfrom(sockets->sock_udp, buf, sizeof(buf), 0,
           (struct sockaddr*)&saddr, &saddr_size);
 
       if(nb > 0)
       {
+        //打印连接者的IP信息
+        if(saddr.ss_family == AF_INET)
+        {
+          char src[INET6_ADDRSTRLEN];
+          inet_ntop(AF_INET, &((struct sockaddr_in*)&saddr)->sin_addr, src, INET6_ADDRSTRLEN);
+          debug(DBG_ATTR, "Peer IP=%s, Port=%d\n", src, ntohs(((struct sockaddr_in*)&saddr)->sin_port));
+        }
+
         if(!turnserver_check_relay_address(listen_address, listen_addressv6,
               &saddr))
         {
@@ -4716,6 +4750,7 @@ static void turnserver_main(struct listen_sockets* sockets,
       struct list_head* n2 = NULL;
 
       /* relayed address */
+      //中继地址上面有数据待接收
       if(sfd_has_data(tmp->relayed_sock, max_fd, &fdsr))
       {
         /* UDP relay is described in RFC 5766
@@ -4743,7 +4778,7 @@ static void turnserver_main(struct listen_sockets* sockets,
             {
               speer = sockets->sock_dtls;
             }
-
+            //从中继地址上接收数据
             turnserver_relayed_recv(buf, nb, (struct sockaddr*)&saddr,
                 (struct sockaddr*)&daddr, saddr_size, allocation_list, speer);
           }
